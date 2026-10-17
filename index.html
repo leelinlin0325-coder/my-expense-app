@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#176b58">
+<title>旅遊記帳 PWA</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;color:#20352f;background:#f4f7f4}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#176b58;color:white;padding:24px 18px 20px}
+header h1{margin:0 0 6px;font-size:25px}
+header p{margin:0;color:#d8eee5;font-size:14px}
+main{max-width:760px;margin:auto;padding:16px}
+.panel{background:white;border:1px solid #e1e9e3;border-radius:16px;padding:16px;margin-bottom:15px;box-shadow:0 3px 12px #173b3010}
+h2{font-size:18px;margin:0 0 14px}
+label{display:block;font-size:13px;color:#52645b;margin:12px 0 5px}
+input,select,textarea,button{font:inherit}
+input,select,textarea{width:100%;padding:11px;border:1px solid #ccd8d0;border-radius:9px;background:white;color:#20352f}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:10px;padding:11px 14px;cursor:pointer}
+.primary{background:#176b58;color:white;font-weight:650;width:100%;margin-top:15px}
+.secondary{background:#e6f2eb;color:#176b58}
+.danger{background:#fff0ed;color:#a53c2d}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat div{background:#e9f4ed;border-radius:12px;padding:13px}
+.stat small{display:block;color:#52645b}
+.stat strong{display:block;font-size:20px;margin-top:4px;overflow-wrap:anywhere}
+.item{padding:12px 0;border-bottom:1px solid #e7ece8}
+.item:last-child{border-bottom:0}
+.itemtop{display:flex;justify-content:space-between;gap:10px}
+.itemtop strong{overflow-wrap:anywhere}
+.muted{color:#718078;font-size:12px;margin-top:4px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.actions button{font-size:13px}
+.note{font-size:12px;line-height:1.65;color:#68776e}
+.empty{color:#718078;text-align:center;padding:22px 5px}
+footer{text-align:center;padding:8px 15px 30px;color:#718078;font-size:12px}
+@media(max-width:440px){main{padding:11px}.panel{padding:13px}.grid{gap:8px}.stat strong{font-size:17px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>✈️ 旅遊記帳</h1>
+  <p>記下旅途花費，掌握每一筆支出</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>📍 旅程與統計</h2>
+    <label for="trip">旅程名稱／地點</label>
+    <input id="trip" placeholder="例如：東京自由行">
+    <div class="stat" style="margin-top:12px">
+      <div><small>本機紀錄筆數</small><strong id="count">0</strong></div>
+      <div><small>目前旅程支出合計</small><strong id="total">0</strong></div>
+    </div>
+    <p class="note">支出合計會依各筆交易的原始幣別分開顯示，不會把日圓、人民幣等不同貨幣直接相加。</p>
+  </section>
+
+  <section class="panel">
+    <h2>➕ 新增支出</h2>
+    <form id="expenseForm">
+      <label for="date">日期</label>
+      <input id="date" type="date" required>
+      <div class="grid">
+        <div><label for="currency">付款貨幣</label>
+          <select id="currency">
+            <option value="JPY">JPY 日圓</option>
+            <option value="CNY">CNY 人民幣</option>
+            <option value="KRW">KRW 韓元</option>
+            <option value="HKD">HKD 港幣</option>
+            <option value="MOP">MOP 澳門元</option>
+            <option value="TWD">TWD 新臺幣</option>
+            <option value="USD">USD 美元</option>
+            <option value="EUR">EUR 歐元</option>
+            <option value="SGD">SGD 新加坡元</option>
+            <option value="THB">THB 泰銖</option>
+          </select>
+        </div>
+        <div><label for="category">支出分類</label>
+          <select id="category">
+            <option>餐飲</option><option>交通</option><option>住宿</option>
+            <option>購物</option><option>門票／娛樂</option><option>通訊</option>
+            <option>醫療</option><option>行李／用品</option><option>其他</option>
+          </select>
+        </div>
+      </div>
+      <label for="merchant">店家／消費項目</label>
+      <input id="merchant" placeholder="例如：便利商店、地鐵車票" required>
+      <div class="grid">
+        <div><label for="amount">總金額</label><input id="amount" type="number" min="0.01" step="any" placeholder="0" required></div>
+        <div><label for="payment">付款方式</label>
+          <select id="payment"><option>現金</option><option>信用卡</option><option>簽帳金融卡</option><option>電子支付</option><option>其他</option></select>
+        </div>
+      </div>
+      <label for="detail">商品明細（選填，每行一項：品名、單價、數量）</label>
+      <textarea id="detail" rows="3" placeholder="例如：&#10;飯糰,150,2&#10;茶飲,120,1"></textarea>
+      <label for="note">備註（選填）</label>
+      <input id="note" placeholder="例如：使用優惠券">
+      <button class="primary" type="submit">儲存這筆支出</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>📒 支出紀錄</h2>
+    <div class="grid">
+      <div><label for="filterCurrency">依幣別篩選</label>
+        <select id="filterCurrency"><option value="">全部幣別</option><option>JPY</option><option>CNY</option><option>KRW</option><option>HKD</option><option>MOP</option><option>TWD</option><option>USD</option><option>EUR</option><option>SGD</option><option>THB</option></select>
+      </div>
+      <div><label for="filterCategory">依分類篩選</label>
+        <select id="filterCategory"><option value="">全部分類</option><option>餐飲</option><option>交通</option><option>住宿</option><option>購物</option><option>門票／娛樂</option><option>通訊</option><option>醫療</option><option>行李／用品</option><option>其他</option></select>
+      </div>
+    </div>
+    <div id="records" class="empty">還沒有支出紀錄，新增第一筆試試看。</div>
+    <div class="actions">
+      <button class="secondary" id="exportCsv" type="button">匯出 CSV</button>
+      <button class="secondary" id="backup" type="button">下載 JSON 備份</button>
+      <button class="secondary" id="restoreButton" type="button">還原 JSON</button>
+      <input id="restoreFile" type="file" accept=".json,application/json" hidden>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>⚙️ 分類管理</h2>
+    <label for="newCategory">新增自訂分類</label>
+    <div class="grid">
+      <input id="newCategory" placeholder="例如：伴手禮">
+      <button class="secondary" id="addCategory" type="button">新增分類</button>
+    </div>
+    <div id="categoryList" class="actions"></div>
+  </section>
+  <section class="panel">
+    <h2>📷 收據辨識（下一階段）</h2>
+    <p class="note">第一版先支援手動輸入商品明細。拍照、逐項 OCR 辨識、單價／數量／小計核對，以及 Firebase 雲端同步，尚未接通，不能把目前紀錄視為雲端備份。</p>
+  </section>
+</main>
+<footer>旅遊記帳 PWA · 第一版測試 · 請定期下載備份</footer>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const DATA_KEY='travel-expense-v1';
+  const CAT_KEY='travel-expense-categories-v1';
+  let records=[];
+  let categories=['餐飲','交通','住宿','購物','門票／娛樂','通訊','醫療','行李／用品','其他'];
+  try{records=JSON.parse(localStorage.getItem(DATA_KEY)||'[]');if(!Array.isArray(records))records=[];}catch(e){records=[];}
+  try{const c=JSON.parse(localStorage.getItem(CAT_KEY)||'null');if(Array.isArray(c)&&c.length)categories=c;}catch(e){}
+  const today=new Date();
+  $('date').value=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
+  $('trip').value=localStorage.getItem('travel-expense-trip-v1')||'';
+  $('trip').addEventListener('input',()=>localStorage.setItem('travel-expense-trip-v1',$('trip').value));
+  function money(n,c){try{return new Intl.NumberFormat('zh-TW',{style:'currency',currency:c,maximumFractionDigits:2}).format(n)}catch(e){return c+' '+n;}}
+  function save(){localStorage.setItem(DATA_KEY,JSON.stringify(records));localStorage.setItem(CAT_KEY,JSON.stringify(categories));}
+  function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function renderCategories(){
+    const select=$('category'),current=select.value;
+    select.innerHTML=categories.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
+    if(categories.includes(current))select.value=current;
+    $('filterCategory').innerHTML='<option value="">全部分類</option>'+categories.map(c=>'<option>'+escapeHtml(c)+'</option>').join('');
+    $('categoryList').innerHTML=categories.map(c=>'<button class="secondary" type="button" data-cat="'+escapeHtml(c)+'">'+escapeHtml(c)+' ×</button>').join('');
+    $('categoryList').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      if(categories.length<=1){alert('至少保留一個分類');return;}
+      if(!confirm('刪除分類「'+b.dataset.cat+'」？既有紀錄不會刪除。'))return;
+      categories=categories.filter(c=>c!==b.dataset.cat);save();renderCategories();render();
+    }));
+  }
+  function render(){
+    const fc=$('filterCurrency').value,fg=$('filterCategory').value;
+    const shown=records.filter(r=>(!fc||r.currency===fc)&&(!fg||r.category===fg)).slice().reverse();
+    $('count').textContent=records.length;
+    const totals={};records.forEach(r=>totals[r.currency]=(totals[r.currency]||0)+r.amount);
+    $('total').textContent=Object.keys(totals).length?Object.entries(totals).map(([c,n])=>money(n,c)).join(' / '):'0';
+    const box=$('records');
+    if(!shown.length){box.className='empty';box.textContent='沒有符合條件的紀錄。';return;}
+    box.className='';
+    box.innerHTML=shown.map(r=>'<div class="item"><div class="itemtop"><strong>'+escapeHtml(r.merchant)+'</strong><strong>'+money(r.amount,r.currency)+'</strong></div><div class="muted">'+escapeHtml(r.date)+' · '+escapeHtml(r.category)+' · '+escapeHtml(r.payment)+' · '+escapeHtml(r.trip||'未命名旅程')+'</div>'+(r.note?'<div class="muted">備註：'+escapeHtml(r.note)+'</div>':'')+(r.details?.length?'<div class="muted">商品：'+r.details.map(d=>escapeHtml(d.name)+' × '+d.qty+'（'+money(d.price,r.currency)+'）').join('、')+'</div>':'')+'<div class="actions"><button class="danger" type="button" data-delete="'+r.id+'">刪除</button></div></div>').join('');
+    box.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>{if(confirm('確定刪除這筆紀錄？')){records=records.filter(r=>r.id!==b.dataset.delete);save();render();}}));
+  }
+  $('expenseForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    const amount=Number($('amount').value);
+    if(!Number.isFinite(amount)||amount<=0){alert('請輸入大於 0 的金額');return;}
+    const details=$('detail').value.split('\n').map(s=>s.trim()).filter(Boolean).map(line=>{
+      const p=line.split(',');
+      if(p.length<3)return {name:line,price:0,qty:1};
+      const price=Number(p[p.length-2]),qty=Number(p[p.length-1]);
+      return {name:p.slice(0,-2).join(',').trim(),price:Number.isFinite(price)?price:0,qty:Number.isFinite(qty)&&qty>0?qty:1};
+    });
+    records.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),date:$('date').value,currency:$('currency').value,category:$('category').value,merchant:$('merchant').value.trim(),amount,payment:$('payment').value,details,note:$('note').value.trim(),trip:$('trip').value.trim(),createdAt:new Date().toISOString()});
+    save();e.target.reset();$('date').value=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');renderCategories();render();alert('已儲存到這台裝置的瀏覽器。請定期下載備份。');
+  });
+  $('filterCurrency').addEventListener('change',render);
+  $('filterCategory').addEventListener('change',render);
+  $('addCategory').addEventListener('click',()=>{
+    const c=$('newCategory').value.trim();
+    if(!c){alert('請先輸入分類名稱');return;}
+    if(categories.includes(c)){alert('這個分類已存在');return;}
+    categories.push(c);$('newCategory').value='';save();renderCategories();render();
+  });
+  function download(name,text,type){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([text],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  $('backup').addEventListener('click',()=>download('travel-expense-backup-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({version:1,trip:$('trip').value,categories,records},null,2),'application/json'));
+  $('restoreButton').addEventListener('click',()=>$('restoreFile').click());
+  $('restoreFile').addEventListener('change',async e=>{
+    const f=e.target.files[0];if(!f)return;
+    try{const data=JSON.parse(await f.text());if(!Array.isArray(data.records)||!Array.isArray(data.categories))throw new Error('格式不符');if(!confirm('還原會取代目前這台裝置的紀錄，請先下載備份。確定繼續？'))return;records=data.records;categories=data.categories;$('trip').value=data.trip||'';save();renderCategories();render();alert('還原完成');}catch(err){alert('無法還原：檔案格式不正確');}finally{e.target.value='';}
+  });
+  $('exportCsv').addEventListener('click',()=>{
+    const rows=[['日期','旅程','店家／項目','幣別','金額','分類','付款方式','商品明細','備註'],...records.map(r=>[r.date,r.trip,r.merchant,r.currency,r.amount,r.category,r.payment,(r.details||[]).map(d=>d.name+' x '+d.qty+' @ '+d.price).join('; '),r.note])];
+    const csv='\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    download('travel-expenses-'+new Date().toISOString().slice(0,10)+'.csv',csv,'text/csv;charset=utf-8');
+  });
+  renderCategories();render();
+})();
+</script>
+</body>
+</html>
