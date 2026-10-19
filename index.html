@@ -47,6 +47,23 @@ footer{text-align:center;padding:8px 15px 30px;color:#718078;font-size:12px}
   <p>記下旅途花費，掌握每一筆支出</p>
 </header>
 <main>
+    <section class="panel">
+    <h2>☁️ 帳號與雲端同步</h2>
+    <p id="cloudStatus" class="note">尚未登入</p>
+    <label for="cloudEmail">管理者電子郵件</label>
+    <input id="cloudEmail" type="email" autocomplete="username" placeholder="輸入 Firebase 登入信箱">
+    <label for="cloudPassword">密碼</label>
+    <input id="cloudPassword" type="password" autocomplete="current-password" placeholder="輸入 Firebase 登入密碼">
+    <div class="actions">
+      <button class="secondary" id="cloudLogin" type="button">登入</button>
+      <button class="secondary" id="cloudLogout" type="button">登出</button>
+    </div>
+    <div class="actions">
+      <button class="secondary" id="cloudUpload" type="button">上傳本機資料</button>
+      <button class="secondary" id="cloudDownload" type="button">下載雲端資料</button>
+    </div>
+    <p class="note">請先登入。第一次同步時，建議先上傳目前裝置的資料；下載雲端資料會取代本機資料，操作前請確認已有備份。</p>
+  </section>
   <section class="panel">
     <h2>📍 旅程與統計</h2>
     <label for="trip">旅程名稱／地點</label>
@@ -208,8 +225,177 @@ footer{text-align:center;padding:8px 15px 30px;color:#718078;font-size:12px}
     const csv='\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
     download('travel-expenses-'+new Date().toISOString().slice(0,10)+'.csv',csv,'text/csv;charset=utf-8');
   });
+
+  // 提供給 Firebase 雲端同步模組使用，保留原有本機資料管理方式
+  window.travelExpenseCloud = {
+    getData() {
+      return {
+        version: 1,
+        trip: $('trip').value,
+        categories: [...categories],
+        records: records.map(r => ({...r, details: Array.isArray(r.details) ? r.details.map(d => ({...d})) : []}))
+      };
+    },
+    setData(data) {
+      if (!data || !Array.isArray(data.records) || !Array.isArray(data.categories)) {
+        throw new Error('雲端資料格式不正確');
+      }
+      records = data.records;
+      categories = data.categories;
+      $('trip').value = data.trip || '';
+      localStorage.setItem('travel-expense-trip-v1', $('trip').value);
+      save();
+      renderCategories();
+      render();
+    }
+  };
+
   renderCategories();render();
 })();
 </script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDbyBfDhEWgM73TQqUVFxjPAiW6pTnzjKE",
+  authDomain: "my-expense-app-53a0a.firebaseapp.com",
+  projectId: "my-expense-app-53a0a",
+  storageBucket: "my-expense-app-53a0a.firebasestorage.app",
+  messagingSenderId: "107116233195",
+  appId: "1:107116233195:web:80f597513d94bc76b7d9ae"
+};
+
+const statusEl = document.getElementById("cloudStatus");
+const loginBtn = document.getElementById("cloudLogin");
+const logoutBtn = document.getElementById("cloudLogout");
+const uploadBtn = document.getElementById("cloudUpload");
+const downloadBtn = document.getElementById("cloudDownload");
+let auth;
+let db;
+let currentUser = null;
+
+function status(message) {
+  statusEl.textContent = message;
+}
+function setButtons() {
+  const signedIn = Boolean(currentUser);
+  loginBtn.disabled = signedIn;
+  logoutBtn.disabled = !signedIn;
+  uploadBtn.disabled = !signedIn;
+  downloadBtn.disabled = !signedIn;
+  document.getElementById("cloudEmail").disabled = signedIn;
+  document.getElementById("cloudPassword").disabled = signedIn;
+}
+function showError(prefix, error) {
+  console.error(prefix, error);
+  const messages = {
+    "auth/invalid-credential": "電子郵件或密碼不正確。",
+    "auth/invalid-email": "電子郵件格式不正確。",
+    "auth/too-many-requests": "登入嘗試過多，請稍後再試。",
+    "permission-denied": "Firestore 權限不足，請檢查資料庫安全性規則。",
+    "unavailable": "目前無法連線到 Firebase，請檢查網路後重試。"
+  };
+  status(prefix + (messages[error?.code] || (error?.message ? "：" + error.message : "，請稍後重試。")));
+}
+try {
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    setButtons();
+    if (user) {
+      status("已登入：" + user.email + "。請選擇上傳或下載，不會自動覆蓋資料。");
+    } else {
+      status("尚未登入。記帳資料目前仍保存在這台裝置。");
+    }
+  });
+} catch (error) {
+  status("Firebase 初始化失敗，請確認網頁設定：" + (error?.message || error));
+  console.error(error);
+}
+
+loginBtn.addEventListener("click", async () => {
+  const email = document.getElementById("cloudEmail").value.trim();
+  const password = document.getElementById("cloudPassword").value;
+  if (!email || !password) {
+    status("請輸入管理者電子郵件與密碼。");
+    return;
+  }
+  loginBtn.disabled = true;
+  status("正在登入…");
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    document.getElementById("cloudPassword").value = "";
+  } catch (error) {
+    showError("登入失敗", error);
+  } finally {
+    setButtons();
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    status("已登出。");
+  } catch (error) {
+    showError("登出失敗", error);
+  }
+});
+
+uploadBtn.addEventListener("click", async () => {
+  if (!currentUser) return status("請先登入。");
+  const data = window.travelExpenseCloud?.getData();
+  if (!data) return status("本機資料介面尚未載入，請重新整理後再試。");
+  if (!confirm("將把這台裝置的全部記帳資料上傳到雲端。若雲端已有資料，會以本機資料取代雲端資料。建議第一次使用時先下載 JSON 備份。確定上傳？")) return;
+  uploadBtn.disabled = true;
+  status("正在上傳本機資料…");
+  try {
+    await setDoc(doc(db, "users", currentUser.uid), {
+      version: 1,
+      trip: data.trip || "",
+      categories: data.categories,
+      records: data.records,
+      updatedAt: serverTimestamp()
+    });
+    status("上傳成功！共上傳 " + data.records.length + " 筆紀錄。");
+  } catch (error) {
+    showError("上傳失敗", error);
+  } finally {
+    setButtons();
+  }
+});
+
+downloadBtn.addEventListener("click", async () => {
+  if (!currentUser) return status("請先登入。");
+  if (!confirm("下載會以雲端資料取代這台裝置目前的記帳資料。請先確認已下載 JSON 備份。確定下載？")) return;
+  downloadBtn.disabled = true;
+  status("正在讀取雲端資料…");
+  try {
+    const snapshot = await getDoc(doc(db, "users", currentUser.uid));
+    if (!snapshot.exists()) {
+      status("雲端目前沒有資料。請先按「上傳本機資料」保存這台裝置的紀錄。");
+      return;
+    }
+    const data = snapshot.data();
+    window.travelExpenseCloud.setData(data);
+    status("下載成功！已載入 " + data.records.length + " 筆雲端紀錄。");
+  } catch (error) {
+    showError("下載失敗", error);
+  } finally {
+    setButtons();
+  }
+});
+
+setButtons();
+</script>
+
 </body>
 </html>
